@@ -412,14 +412,15 @@ def fig_a1_drift(outdir, drift_data_path):
             ax.semilogy(time, drift, color=color, label=labels[mult],
                         linewidth=lw, linestyle=ls, alpha=0.9)
 
-        ax.set_xlabel('Simulation time')
-        ax.set_ylabel(ylabel)
+        ax.set_xlabel('Simulation time', fontsize=14)
+        ax.set_ylabel(ylabel, fontsize=14)
+        ax.tick_params(axis='both', labelsize=12)
         ax.set_xlim(0, n_steps * dt_nom)
         ax.grid(True, alpha=0.3, linestyle='--')
 
     handles, lbls = axes[0].get_legend_handles_labels()
     fig.legend(handles, lbls, loc='upper center', ncol=5, framealpha=0.9,
-               bbox_to_anchor=(0.5, 1.02), fontsize=12)
+               bbox_to_anchor=(0.5, 1.02), fontsize=13)
 
     fig.tight_layout()
 
