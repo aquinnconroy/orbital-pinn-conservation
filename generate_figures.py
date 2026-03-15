@@ -34,12 +34,12 @@ from scipy import stats
 plt.rcParams.update({
     'font.family': 'sans-serif',
     'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
-    'font.size': 10,
-    'axes.titlesize': 12,
-    'axes.labelsize': 11,
-    'xtick.labelsize': 9,
-    'ytick.labelsize': 9,
-    'legend.fontsize': 9,
+    'font.size': 12,
+    'axes.titlesize': 14,
+    'axes.labelsize': 13,
+    'xtick.labelsize': 12,
+    'ytick.labelsize': 12,
+    'legend.fontsize': 11,
     'figure.dpi': 300,
     'savefig.dpi': 300,
     'savefig.bbox': 'tight',
@@ -95,7 +95,6 @@ def fig1_mse_comparison(groups, outdir):
             edgecolor='black', linewidth=0.5, width=0.55, zorder=3)
     ax1.scatter([0, 1], medians, marker='D', color='white', edgecolor='black', s=30, zorder=4, label='Median')
     ax1.set_ylabel('Best Validation MSE')
-    ax1.set_title('(a) Mean Validation MSE', fontsize=10, fontweight='bold')
     ax1.legend(loc='upper right', framealpha=0.8)
 
     pct = (means[0] - means[1]) / means[0] * 100
@@ -109,7 +108,6 @@ def fig1_mse_comparison(groups, outdir):
              markersize=3, linewidth=1, label=f'Conservation (n={len(cn_mse)})', alpha=0.8)
     ax2.set_xlabel('Run Index (sorted by MSE)')
     ax2.set_ylabel('Best Validation MSE')
-    ax2.set_title('(b) Distribution of Validation MSE', fontsize=10, fontweight='bold')
     ax2.legend(loc='upper left', framealpha=0.8)
 
     fig.tight_layout()
@@ -152,7 +150,6 @@ def fig2_conservation_drift(groups, outdir):
             plt.setp(bp[element], color='black', linewidth=0.8)
 
         ax.set_yscale('log')
-        ax.set_title(title, fontsize=9, fontweight='bold')
         if ax == axes[0]:
             ax.set_ylabel('Drift (log scale)')
 
@@ -168,8 +165,7 @@ def fig2_conservation_drift(groups, outdir):
                    color=color, fontweight='bold',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=color, alpha=0.9))
 
-    fig.suptitle('Conservation Law Preservation Over 500-Step Rollouts', fontsize=11, fontweight='bold')
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.tight_layout()
     path = outdir / 'fig2_conservation_drift.png'
     fig.savefig(path)
     plt.close(fig)
@@ -226,7 +222,6 @@ def fig3_parallel_coordinates(groups, outdir):
     ax.set_xticks(x_positions)
     ax.set_xticklabels(dim_labels, fontsize=9)
     ax.set_ylabel('Normalized Value')
-    ax.set_title('Hyperparameter Parallel Coordinates (blue = lower MSE)', fontsize=10, fontweight='bold')
 
     for i, d in enumerate(dims):
         ax.text(i, -0.12, f'{mins[d]:.3g}', ha='center', fontsize=7, color='gray')
@@ -262,14 +257,12 @@ def fig4_500step_comparison(groups, outdir):
     ax1.set_yscale('log')
     ax1.set_xlabel('Run Index (sorted)')
     ax1.set_ylabel('500-Step Position MSE (log)')
-    ax1.set_title('(a) 500-Step MSE: All Runs', fontsize=10, fontweight='bold')
     ax1.legend(loc='upper left', framealpha=0.8)
 
     ax2.scatter(range(len(cn_500)), cn_500, c=COLORS['conservation'], s=20, alpha=0.8, zorder=3)
     ax2.set_xlabel('Run Index (sorted)')
     ax2.set_ylabel('500-Step Position MSE')
     cn_mean, cn_std = np.mean(cn_500), np.std(cn_500)
-    ax2.set_title(f'(b) Conservation Detail: {cn_mean:.1f} \u00b1 {cn_std:.1f}', fontsize=10, fontweight='bold')
     ax2.axhline(cn_mean, color=COLORS['conservation'], linestyle='--', alpha=0.5)
 
     fig.tight_layout()
@@ -317,7 +310,6 @@ def fig5_error_growth(groups, outdir, rollout_csv=None):
 
     ax1.set_xlabel('Rollout Steps')
     ax1.set_ylabel('Position MSE')
-    ax1.set_title('(a) Error Growth (log-log)', fontsize=10, fontweight='bold')
     ax1.legend(loc='lower right', framealpha=0.8, fontsize=8)
 
     ratio = bl_means / cn_means
@@ -327,7 +319,6 @@ def fig5_error_growth(groups, outdir, rollout_csv=None):
     ax2.axhline(1, color='gray', linestyle='--', alpha=0.5)
     ax2.set_xlabel('Rollout Steps')
     ax2.set_ylabel('Baseline / Conservation MSE')
-    ax2.set_title('(b) Conservation Advantage', fontsize=10, fontweight='bold')
     ax2.set_xscale('log')
 
     fig.tight_layout()
@@ -372,7 +363,6 @@ def fig6_ablation(groups, outdir):
     ax.set_xticks(range(len(configs)))
     ax.set_xticklabels([c[0] for c in configs], fontsize=9)
     ax.set_ylabel('500-Step Position MSE (log scale)')
-    ax.set_title('Ablation: 500-Step MSE by Conservation Configuration', fontsize=11, fontweight='bold', pad=20)
 
     fig.tight_layout(pad=1.5)
     path = outdir / 'fig6_ablation.png'
@@ -422,7 +412,6 @@ def fig_a1_drift(outdir, drift_data_path):
             ax.semilogy(time, drift, color=color, label=labels[mult],
                         linewidth=lw, linestyle=ls, alpha=0.9)
 
-        ax.set_title(title, fontweight='bold')
         ax.set_xlabel('Simulation time')
         ax.set_ylabel(ylabel)
         ax.set_xlim(0, n_steps * dt_nom)
@@ -430,9 +419,9 @@ def fig_a1_drift(outdir, drift_data_path):
 
     handles, lbls = axes[0].get_legend_handles_labels()
     fig.legend(handles, lbls, loc='upper center', ncol=5, framealpha=0.9,
-               bbox_to_anchor=(0.5, 1.02), fontsize=9)
+               bbox_to_anchor=(0.5, 1.02), fontsize=12)
 
-    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.tight_layout()
 
     path = outdir / 'fig_a1_drift_comparison.png'
     fig.savefig(path, dpi=300, bbox_inches='tight')
@@ -495,20 +484,19 @@ def fig_a2_correlation_heatmap(groups, outdir):
                 text = f'{val:.2f}'
                 if is_sig and is_meaningful:
                     text += '*'
-                if not is_meaningful and i != j:
+                if i == j:
+                    color = '#555555'
+                elif not is_meaningful:
                     color = '#999999' if abs(val) <= 0.6 else '#cccccc'
                 ax.text(j, i, text, ha='center', va='center',
-                        color=color, fontsize=9, fontweight=weight)
+                        color=color, fontsize=10, fontweight=weight)
 
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
-    ax.set_xticklabels(param_labels, rotation=45, ha='right', fontsize=9)
-    ax.set_yticklabels(param_labels, fontsize=9)
+    ax.set_xticklabels(param_labels, rotation=45, ha='right', fontsize=11)
+    ax.set_yticklabels(param_labels, fontsize=11)
 
     fig.colorbar(im, ax=ax, shrink=0.8, label='Pearson r')
-
-    ax.set_title('Hyperparameter Correlation Matrix\n(n=34, conservation-augmented models)',
-                 fontsize=11, fontweight='bold', pad=12)
 
     fig.text(0.5, 0.01,
              '* p < 0.05 for correlations involving an outcome metric (MSE).\n'
@@ -554,11 +542,9 @@ if __name__ == '__main__':
     fig5_error_growth(groups, outdir, rollout_csv)
     fig6_ablation(groups, outdir)
 
-    # Appendix figures use slightly different style
+    # Appendix figures: keep same font sizes, just disable grid
     print('\nAppendix figures:')
     plt.rcParams.update({
-        'axes.titlesize': 11,
-        'axes.labelsize': 10,
         'axes.grid': False,
     })
     fig_a1_drift(outdir, drift_data)
