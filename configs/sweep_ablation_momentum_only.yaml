@@ -1,0 +1,121 @@
+# =============================================================================
+# N-Body PINN v3.6 - MOMENTUM ONLY Ablation
+# =============================================================================
+# Isolated momentum conservation penalty (energy & angular = 0)
+# 10 runs with random hyperparameter sampling
+# =============================================================================
+
+command:
+  - python
+  - ${program}
+  - ${args}
+program: PINNv3.6.py
+project: nbody-pinn-v3.6
+method: random
+metric:
+  goal: minimize
+  name: best_val_mse
+
+run_cap: 10
+
+parameters:
+  # Conservation weights - MOMENTUM ONLY
+  weight_energy:
+    value: 0
+  weight_momentum:
+    min: 0.1
+    max: 5.0
+    distribution: log_uniform_values
+  weight_angular_momentum:
+    value: 0
+
+  # Data parameters (FIXED)
+  num_train_traj:
+    value: 2000
+  num_val_traj:
+    value: 250
+  num_test_traj:
+    value: 250
+  traj_steps:
+    value: 300
+  rollout_steps:
+    value: 10
+
+  # Physics parameters (FIXED)
+  n_bodies:
+    value: 6
+  dim:
+    value: 3
+  dt:
+    value: 0.01
+  G:
+    value: 1
+  softening:
+    value: 0.001
+
+  # Architecture
+  hidden_sizes:
+    values:
+      - "[256, 256, 256, 128]"
+      - "[128, 128, 128]"
+      - "[512, 256, 128]"
+      - "[256, 256, 256, 256]"
+
+  # Drift modes
+  use_integrated_energy_drift:
+    value: true
+  use_integrated_momentum_drift:
+    value: true
+  use_integrated_angular_drift:
+    value: true
+
+  # Temporal weighting
+  temporal_decay_alpha:
+    min: 0.5
+    max: 10.0
+    distribution: log_uniform_values
+  apply_temporal_to_conservation:
+    value: true
+
+  # Dynamic normalization OFF
+  use_dynamic_normalization:
+    value: false
+  norm_update_interval:
+    value: 10
+  norm_update_momentum:
+    value: 0.9
+
+  # Training
+  epochs:
+    value: 100
+  batch_size:
+    value: 64
+  learning_rate:
+    min: 0.0005
+    max: 0.005
+    distribution: log_uniform_values
+
+  # Early stopping
+  early_stopping_patience:
+    value: 20
+
+  # FP64
+  use_fp64_training:
+    value: true
+
+  # Scheduler
+  scheduler_type:
+    values:
+      - step
+      - plateau
+      - none
+  scheduler_eta_min:
+    value: 0.000001
+  scheduler_step_size:
+    value: 10
+  scheduler_gamma:
+    value: 0.5
+  scheduler_patience:
+    value: 5
+  scheduler_factor:
+    value: 0.5

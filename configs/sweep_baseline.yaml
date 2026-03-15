@@ -1,0 +1,204 @@
+# =============================================================================
+# N-Body PINN v3.6 Sweep Configuration
+# =============================================================================
+# 
+# Key changes from v3.5:
+#   - Removed Fourier feature parameters (use_fourier_features, fourier_scales)
+#   - Added drift mode flags for all conservation losses
+#   - Added early stopping patience parameter
+#   - Added FP64 training mode flag (disabled by default)
+#   - Changed temporal_decay_alpha to log_uniform [0.5, 10.0]
+#   - Added norm_update_interval sweep values
+#
+# This configuration enables comprehensive study of:
+#   - Integrated vs per-step drift modes for conservation losses
+#   - Equal treatment of all three conservation losses
+#   - Early stopping for efficient sweep runs
+#
+# =============================================================================
+
+command:
+  - python
+  - ${program}
+  - ${args}
+program: PINNv3.6.py
+project: nbody-pinn-v3.6
+method: random
+metric:
+  goal: minimize
+  name: best_val_mse
+
+parameters:
+  # ==========================================================================
+  # Loss weights (all losses normalized to ~1.0 internally, so weights are comparable)
+  # ==========================================================================
+
+  weight_energy:
+    value: 0
+  weight_momentum:
+    value: 0
+  weight_angular_momentum:
+    value: 0
+
+  # ==========================================================================
+  # Data parameters (FIXED for consistency)
+  # ==========================================================================
+  num_train_traj:
+    value: 2000
+  num_val_traj:
+    value: 250
+  num_test_traj:
+    value: 250
+  traj_steps:
+    value: 300
+  rollout_steps:
+    value: 10
+
+  # ==========================================================================
+  # Physics parameters (FIXED for consistency)
+  # ==========================================================================
+  n_bodies:
+    value: 6
+  dim:
+    value: 3
+  dt:
+    value: 0.01
+  G:
+    value: 1
+  softening:
+    value: 0.001
+
+  # ==========================================================================
+  # Model architecture parameters
+  # ==========================================================================
+
+  # Hidden layer sizes for the MLP
+  hidden_sizes:
+    values:
+      - "[256, 256, 256, 128]"    # Original 4-layer (default)
+      - "[128, 128, 128]"         # Smaller 3-layer
+      - "[512, 256, 128]"         # Pyramidal 3-layer
+      - "[256, 256, 256, 256]"    # Deeper uniform 4-layer
+
+  # ==========================================================================
+  # Drift Mode Configuration (NEW in v3.6)
+  # 
+  # Each conservation loss can use either:
+  #   - Integrated drift (True): Penalize cumulative drift from initial state
+  #     E.g., ||E[t] - E[0]||^2, ||P[t] - P[0]||^2, ||L[t] - L[0]||^2
+  #   - Per-step drift (False): Penalize consecutive differences
+  #     E.g., ||E[t+1] - E[t]||^2, ||P[t+1] - P[t]||^2, ||L[t+1] - L[t]||^2
+  #
+  # This enables fair comparison of different penalty approaches.
+  # ==========================================================================
+
+  use_integrated_energy_drift:
+    values:
+      - true  # Integrated: penalize drift from initial state
+
+  use_integrated_momentum_drift:
+    values:
+      - true  # Integrated: penalize drift from initial state
+
+  use_integrated_angular_drift:
+    values:
+      - true  # Integrated: penalize drift from initial state
+
+  # ==========================================================================
+  # Adaptive Temporal Weighting
+  # Controls how aggressively later steps are suppressed until earlier steps improve
+  # ==========================================================================
+
+  # Alpha parameter: w[t] = exp(-alpha * sum(L[0:t]))
+  # Higher alpha = more aggressive suppression of later steps
+  # Range: [0.5, 10.0] - extended range for comprehensive study
+  temporal_decay_alpha:
+    min: 0.5
+    max: 10.0
+    distribution: log_uniform_values
+
+  # Whether to apply adaptive temporal weighting to conservation losses
+  # Set to true to naturally balance integrated drift (early steps weighted more heavily)
+  apply_temporal_to_conservation:
+    value: true
+
+  # ==========================================================================
+  # Dynamic Gradient Balancing
+  # ==========================================================================
+
+  # Enable/disable dynamic gradient balancing (EMA-based loss normalization)
+  # v3.6b: Set to FALSE - per-sample normalization in loss functions is sufficient
+  # When false, weights directly control relative importance of each loss
+  use_dynamic_normalization:
+    value: false
+
+  # How often to update normalization constants (in epochs)
+  # Only used if use_dynamic_normalization is true
+  norm_update_interval:
+    values:
+      - 5
+      - 10
+      - 20
+      - 50
+
+  # EMA momentum for norm updates (fixed for stability)
+  # 0.9 = 90% old / 10% new (slow adaptation)
+  # Only used if use_dynamic_normalization is true
+  norm_update_momentum:
+    value: 0.9
+
+  # ==========================================================================
+  # Training parameters
+  # ==========================================================================
+  epochs:
+    value: 100
+  batch_size:
+    value: 64
+  learning_rate:
+    min: 0.0005
+    max: 0.005
+    distribution: log_uniform_values
+
+  # ==========================================================================
+  # Early Stopping (NEW in v3.6)
+  # ==========================================================================
+
+  # Number of epochs without improvement before stopping
+  # Tracks validation MSE as primary metric
+  early_stopping_patience:
+    value: 20
+
+  # ==========================================================================
+  # FP64 Training Mode (NEW in v3.6)
+  # ==========================================================================
+
+  # When true, model forward/backward runs in FP64 for numerical stability
+  # ~2-3x slower than FP32, useful for validation of promising configurations
+  # Default: false (can enable manually for specific runs)
+  use_fp64_training:
+    value: true
+
+  # ==========================================================================
+  # Learning rate scheduler parameters
+  # ==========================================================================
+
+  scheduler_type:
+    values:
+      - step
+      - plateau
+      - none
+
+  scheduler_eta_min:
+    value: 0.000001
+
+  scheduler_step_size:
+    value: 10
+
+  scheduler_gamma:
+    value: 0.5
+
+  scheduler_patience:
+    value: 5
+
+  scheduler_factor:
+    value: 0.5
