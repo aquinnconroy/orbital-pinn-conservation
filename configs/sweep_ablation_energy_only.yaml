@@ -1,5 +1,5 @@
 # =============================================================================
-# N-Body PINN v3.6 - ENERGY ONLY Ablation
+# N-Body PINN - ENERGY ONLY Ablation
 # =============================================================================
 # Isolated energy conservation penalty (momentum & angular = 0)
 # 10 runs with random hyperparameter sampling
@@ -9,7 +9,7 @@ command:
   - python
   - ${program}
   - ${args}
-program: PINNv3.6.py
+program: train.py
 project: nbody-pinn-v3.6
 method: random
 metric:

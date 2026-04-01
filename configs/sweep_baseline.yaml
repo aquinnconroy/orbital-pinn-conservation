@@ -1,19 +1,9 @@
 # =============================================================================
-# N-Body PINN v3.6 Sweep Configuration
+# N-Body PINN Baseline Sweep Configuration
 # =============================================================================
-# 
-# Key changes from v3.5:
-#   - Removed Fourier feature parameters (use_fourier_features, fourier_scales)
-#   - Added drift mode flags for all conservation losses
-#   - Added early stopping patience parameter
-#   - Added FP64 training mode flag (disabled by default)
-#   - Changed temporal_decay_alpha to log_uniform [0.5, 10.0]
-#   - Added norm_update_interval sweep values
 #
-# This configuration enables comprehensive study of:
-#   - Integrated vs per-step drift modes for conservation losses
-#   - Equal treatment of all three conservation losses
-#   - Early stopping for efficient sweep runs
+# Baseline models with no conservation penalties (all weights = 0).
+# See also: sweep_conservation.yaml for the conservation-augmented counterpart.
 #
 # =============================================================================
 
@@ -21,7 +11,7 @@ command:
   - python
   - ${program}
   - ${args}
-program: PINNv3.6.py
+program: train.py
 project: nbody-pinn-v3.6
 method: random
 metric:
@@ -81,7 +71,7 @@ parameters:
       - "[256, 256, 256, 256]"    # Deeper uniform 4-layer
 
   # ==========================================================================
-  # Drift Mode Configuration (NEW in v3.6)
+  # Drift Mode Configuration
   # 
   # Each conservation loss can use either:
   #   - Integrated drift (True): Penalize cumulative drift from initial state
@@ -127,7 +117,7 @@ parameters:
   # ==========================================================================
 
   # Enable/disable dynamic gradient balancing (EMA-based loss normalization)
-  # v3.6b: Set to FALSE - per-sample normalization in loss functions is sufficient
+  # Set to FALSE - per-sample normalization in loss functions is sufficient
   # When false, weights directly control relative importance of each loss
   use_dynamic_normalization:
     value: false
@@ -160,7 +150,7 @@ parameters:
     distribution: log_uniform_values
 
   # ==========================================================================
-  # Early Stopping (NEW in v3.6)
+  # Early Stopping
   # ==========================================================================
 
   # Number of epochs without improvement before stopping
@@ -169,7 +159,7 @@ parameters:
     value: 20
 
   # ==========================================================================
-  # FP64 Training Mode (NEW in v3.6)
+  # FP64 Training Mode
   # ==========================================================================
 
   # When true, model forward/backward runs in FP64 for numerical stability

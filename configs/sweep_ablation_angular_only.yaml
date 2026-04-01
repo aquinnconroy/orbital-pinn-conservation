@@ -1,5 +1,5 @@
 # =============================================================================
-# N-Body PINN v3.6 - ANGULAR MOMENTUM ONLY Ablation
+# N-Body PINN - ANGULAR MOMENTUM ONLY Ablation
 # =============================================================================
 # Isolated angular momentum conservation penalty (energy & momentum = 0)
 # 10 runs with random hyperparameter sampling
@@ -9,7 +9,7 @@ command:
   - python
   - ${program}
   - ${args}
-program: PINNv3.6.py
+program: train.py
 project: nbody-pinn-v3.6
 method: random
 metric:

@@ -1,56 +1,29 @@
 """
-N-Body Physics-Informed Neural Network (PINN) v3.6 - Training Script for W&B Sweeps
+N-Body Physics-Informed Neural Network (PINN) - Training Script for W&B Sweeps
 
 This script trains a neural network to predict N-body gravitational dynamics while
 enforcing physical conservation laws (energy, momentum, angular momentum) as soft
 constraints in the loss function.
 
-FIX (v3.6a): Validation now uses UNWEIGHTED losses by default. Previously, temporal
-weighting was applied during validation, which masked poor performance on later
-timesteps. Now val/mse_raw and val/mse_weighted will be the same (both unweighted)
-during validation, giving a true picture of model performance across all timesteps.
-Temporal weighting still applies during training to help the model learn short-term
-predictions first.
+Architecture: Direct MLP with flattened pos + vel + mass input (42 features for 6 bodies, 3D).
 
-Architecture: Direct MLP with raw pos + vel + mass input (42 features for 6 bodies, 3D).
-
-v3.6 Key Changes (Comprehensive Conservation Study):
-    1. Removed Fourier Features: Simplified model uses raw inputs only.
-    2. Fixed 3D Angular Momentum Bug: Explicit shape handling for mass multiplication.
-    3. Per-Batch Conservation Losses: All conservation losses return (B,) shape for
-       consistent temporal weighting with MSE.
-    4. UNNORMALIZED Integrated Drift: All three conservation losses use the same
-       unnormalized integrated drift formulation for fair comparison:
-       - Energy: (E[t] - E[0])^2
-       - Momentum: ||P[t] - P[0]||^2
-       - Angular: ||L[t] - L[0]||^2 (or (L[t] - L[0])^2 for 2D)
-       This allows studying relative importance of each conservation law.
-    5. Configurable Drift Modes: Each conservation loss can use integrated drift
-       (from initial state) or per-step drift (consecutive differences).
-       - use_integrated_energy_drift: true=E[t]-E[0], false=E[t+1]-E[t]
-       - use_integrated_momentum_drift: true=P[t]-P[0], false=P[t+1]-P[t]
-       - use_integrated_angular_drift: true=L[t]-L[0], false=L[t+1]-L[t]
-    6. FP64 Training Mode: Optional use_fp64_training flag for numerical stability
-       (disabled by default, ~2-3x slower but more accurate gradients).
-    7. Early Stopping: Tracks best model by validation MSE, saves checkpoint_best.pt,
-       stops if no improvement for early_stopping_patience epochs.
-    8. Enhanced Wandb Logging: Drift mode configs, early stopping events, norm updates.
-
-v3.5 Features (retained):
-    - Adaptive Temporal Weighting: w[t] = exp(-alpha * sum(L[0:t]))
-    - FP64 validation physics computations
-    - Dynamic gradient balancing via periodic norm updates
-    - Configurable hidden layer architecture
-    - Multiple LR scheduler options
-    - Center-of-Mass Frame for Angular Momentum
-
-Changelog:
-    v3.6: Removed Fourier features, UNNORMALIZED integrated drift for all conservation laws,
-           drift modes, early stopping, per-batch losses
-    v3.5: Adaptive temporal weighting, integrated energy drift, CoM angular momentum
+Features:
+    - Normalized Integrated Drift: All three conservation losses use the same
+      normalized drift formulation for scale-invariant comparison:
+        loss = ((Q[t] - Q[0]) / sqrt(|Q[0]|^2 + eps^2))^2
+      where Q is the conserved quantity (energy, momentum, or angular momentum).
+    - Configurable Drift Modes: Each conservation loss can use integrated drift
+      (from initial state) or per-step drift (consecutive differences).
+    - Adaptive Temporal Weighting: w[t] = exp(-alpha * sum(L[0:t])), prioritizing
+      short-term predictions early in training.
+    - Validation uses unweighted losses for unbiased performance measurement.
+    - FP64 physics computations during validation for numerical accuracy.
+    - Dynamic gradient balancing via periodic norm updates.
+    - Early stopping based on validation MSE.
+    - Center-of-mass frame for angular momentum computation.
 
 Usage:
-    wandb sweep sweep_config_v3.6.yaml
+    wandb sweep sweep_config.yaml
 
 Author: Quinn Conroy
 """
@@ -223,11 +196,8 @@ def compute_linear_momentum(vel, mass):
 def compute_angular_momentum(pos, vel, mass):
     """
     L = sum_i(m_i * r_i x v_i) computed in center-of-mass frame.
-    
+
     Returns (B,) for 2D, (B, 3) for 3D.
-    
-    v3.6 Fix: Explicit shape handling for 3D case to ensure proper broadcasting
-    of mass (B, N, 1) with cross product (B, N, 3).
     """
     B, N, D = pos.shape
     
@@ -249,8 +219,7 @@ def compute_angular_momentum(pos, vel, mass):
         # 3D: L = m * (r x v), vector per body
         # cross has shape (B, N, 3), mass has shape (B, N, 1)
         cross = torch.cross(pos_rel, vel_rel, dim=-1)  # (B, N, 3)
-        # Explicit broadcast: mass (B, N, 1) * cross (B, N, 3) -> (B, N, 3)
-        L_per_body = mass * cross  # (B, N, 3) - broadcasting works correctly
+        L_per_body = mass * cross  # (B, N, 1) * (B, N, 3) -> (B, N, 3)
         return L_per_body.sum(dim=1)  # (B, 3)
 
 
@@ -292,17 +261,14 @@ def angular_momentum_conservation_loss_per_batch(pos, vel, mass, pos_next, vel_n
 
 def compute_energy_drift_per_batch(E_next, E_ref, eps=1e-6):
     """
-    Per-batch energy drift (NORMALIZED).
+    Per-batch normalized energy drift: ((E_next - E_ref) / sqrt(|E_ref|^2 + eps^2))^2
 
-    v3.6b: Computes normalized squared energy difference for scale-invariance.
-    All three conservation losses (energy, momentum, angular) use NORMALIZED
-    drift for fair comparison across samples and consistent loss scales (~1.0).
-        loss = ((E_next - E_ref) / sqrt(|E_ref|² + eps²))²
+    Normalization ensures scale-invariance across samples and consistent loss scales.
 
     Args:
         E_next: Energy at next timestep (usually predicted), shape (B,)
         E_ref: Reference energy (initial state), shape (B,)
-        eps: Small value for numerical stability (default 1e-6)
+        eps: Small value for numerical stability
 
     Returns:
         drift: Shape (B,) - normalized squared drift
@@ -315,16 +281,14 @@ def compute_energy_drift_per_batch(E_next, E_ref, eps=1e-6):
 
 def compute_momentum_drift_per_batch(P_next, P_ref, eps=1e-6):
     """
-    Per-batch momentum drift (NORMALIZED).
+    Per-batch normalized momentum drift: (||P_next - P_ref|| / sqrt(||P_ref||^2 + eps^2))^2
 
-    v3.6b: Computes normalized squared momentum difference for scale-invariance.
-    Normalization enables fair comparison with energy and angular momentum losses.
-        loss = (||P_next - P_ref|| / sqrt(||P_ref||² + eps²))²
+    Normalization ensures scale-invariance and fair comparison with other conservation losses.
 
     Args:
         P_next: Momentum at next timestep (usually predicted), shape (B, D)
         P_ref: Reference momentum (initial or previous true state), shape (B, D)
-        eps: Small value for numerical stability (default 1e-6)
+        eps: Small value for numerical stability
 
     Returns:
         drift: Shape (B,) - normalized squared drift
@@ -338,16 +302,14 @@ def compute_momentum_drift_per_batch(P_next, P_ref, eps=1e-6):
 
 def compute_angular_drift_per_batch(L_next, L_ref, eps=1e-6):
     """
-    Per-batch angular momentum drift (NORMALIZED).
+    Per-batch normalized angular momentum drift: (||L_next - L_ref|| / sqrt(||L_ref||^2 + eps^2))^2
 
-    v3.6b: Computes normalized squared angular momentum difference for scale-invariance.
-    Normalization enables fair comparison with energy and momentum losses.
-        loss = (||L_next - L_ref|| / sqrt(||L_ref||² + eps²))²
+    Normalization ensures scale-invariance and fair comparison with other conservation losses.
 
     Args:
-        L_next: Angular momentum at next timestep (usually predicted), shape (B,) for 2D, (B, 3) for 3D
+        L_next: Angular momentum at next timestep, shape (B,) for 2D, (B, 3) for 3D
         L_ref: Reference angular momentum (initial or previous true state), same shape
-        eps: Small value for numerical stability (default 1e-6)
+        eps: Small value for numerical stability
 
     Returns:
         drift: Shape (B,) - normalized squared drift
@@ -373,9 +335,6 @@ def compute_angular_drift_per_batch(L_next, L_ref, eps=1e-6):
 class DirectOrbitMLP(nn.Module):
     """
     Direct MLP that predicts next velocities from current state.
-    
-    v3.6: Simplified architecture using raw pos + vel + mass inputs.
-    No Fourier feature encoding.
 
     Input: Flattened [positions, velocities, masses] for all bodies
            = N*D (pos) + N*D (vel) + N (mass) = N*(2D+1) features
@@ -561,10 +520,8 @@ def compute_loss(batch, model, device, config, norm_constants=None, use_fp64_phy
     """
     Compute total loss = MSE + weighted conservation penalties.
 
-    v3.6 Key Changes:
-    1. All conservation losses return per-batch (B,) shape for consistent temporal weighting.
-    2. Configurable drift modes: integrated (from initial state) vs per-step (consecutive).
-    3. Supports FP64 training mode for numerical stability.
+    All conservation losses return per-batch (B,) shape for consistent temporal weighting.
+    Drift modes are configurable: integrated (from initial state) vs per-step (consecutive).
 
     Args:
         batch: Dictionary with 'pos_seq', 'vel_seq', 'mass', 'dt'
@@ -778,8 +735,7 @@ def compute_loss(batch, model, device, config, norm_constants=None, use_fp64_phy
         total_loss = total_loss + config.weight_energy * e_normalized
 
     if config.weight_momentum > 0 and momentum_losses_per_step:
-        # v3.6a: No temporal weighting for momentum (matching v3.5 behavior)
-        # Momentum should be conserved at ALL timesteps equally
+        # No temporal weighting for momentum — it should be conserved at all timesteps equally
         momentum_tensor = torch.stack(momentum_losses_per_step, dim=0)  # (T, B)
         weighted_momentum = momentum_tensor.mean()  # Simple mean over time and batch
 
@@ -792,8 +748,7 @@ def compute_loss(batch, model, device, config, norm_constants=None, use_fp64_phy
         total_loss = total_loss + config.weight_momentum * p_normalized
 
     if config.weight_angular_momentum > 0 and angular_losses_per_step:
-        # v3.6a: No temporal weighting for angular momentum (matching v3.5 behavior)
-        # Angular momentum should be conserved at ALL timesteps equally
+        # No temporal weighting for angular momentum — it should be conserved at all timesteps equally
         angular_tensor = torch.stack(angular_losses_per_step, dim=0)  # (T, B)
         weighted_angular = angular_tensor.mean()  # Simple mean over time and batch
 
@@ -1072,11 +1027,7 @@ def evaluate_conservation_metrics(model, test_loader, device, config, steps=500,
 # =============================================================================
 
 def train():
-    """
-    Main training function - called for each wandb sweep run.
-
-    v3.6: Removed Fourier features, added drift modes, early stopping, per-batch losses.
-    """
+    """Main training function — called for each wandb sweep run."""
     run = wandb.init()
     config = wandb.config
 
@@ -1205,7 +1156,7 @@ def train():
     elif use_fp64_training:
         print("AMP disabled (using FP64 training)")
 
-    # v3.6: Log drift mode configurations
+    # Log drift mode configurations
     use_integrated_energy_drift = getattr(config, 'use_integrated_energy_drift', True)
     use_integrated_momentum_drift = getattr(config, 'use_integrated_momentum_drift', True)
     use_integrated_angular_drift = getattr(config, 'use_integrated_angular_drift', True)
